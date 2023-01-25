@@ -110,7 +110,7 @@ class FormWidget(QWidget):
             self.user = self.line_id.text()
             self.password = self.line_password.text()
             logging_message.input_message(path = message_path,message = 'user: %s password: %s' %(self.user,'self.password'))
-            self.session_list = rest.initsession(self.user, self.password)
+            self.session_list = jira_rest.initsession(self.user, self.password)
             self.session = self.session_list[0]
             self.session_info = self.session_list[1]
             #fail to login

@@ -49,7 +49,7 @@ def start_app():
 
 if __name__ =='__main__':
     try:
-        debug_app()
+        start_app()
     except Exception as E:
         logging_message.input_message(path = message_path,message = version)
 
