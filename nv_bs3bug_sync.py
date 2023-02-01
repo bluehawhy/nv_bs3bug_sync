@@ -18,11 +18,13 @@ config_path = os.path.join('static','config','config.json')
 message_path =config.load_config(config_path)['message_path']
 
 config_data = config.load_config(config_path)
-version = 'nv bs3 bug sync v1.0'
+version = 'nv bs3 bug sync v1.1'
 
 revision_list=[
     'Revision list',
-    'v1.0 (2022-11-18) : initial release'
+    'v1.0 (2022-11-18) : initial release',
+    'v1.1 (2023-02-01) : disable button during sync',
+    '==============================================================================='
     ]
 
 
@@ -40,9 +42,8 @@ def start_app():
 
     if os.path.isfile(message_path):
         logging_message.remove_message(message_path)
-    logging_message.input_message(path = message_path,message = version)
     for revision in revision_list:
-        logging_message.input_message(path = message_path,message = revision)
+        logging_message.input_message(path = message_path,message = revision, settime= False)
     app = QApplication(sys.argv)
     ex = bs3_sync_ui.MyMainWindow(version)
     sys.exit(app.exec_())

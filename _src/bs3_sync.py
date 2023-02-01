@@ -76,17 +76,17 @@ def sync_file_server_jira(jira_rest_handler,key):
     uploaded_file_list = jira_rest_handler.get_attachment(key)
     logging.debug("update file list in local : %s" %str(file_list))
     logging.debug("updated file list in jira : %s" %str(uploaded_file_list))
-    logging_message.input_message(path = message_path,message = 'update file list in local : %s'  %str(file_list))
-    logging_message.input_message(path = message_path,message = 'updated file list in jira : %s'  %str(uploaded_file_list))
+    #logging_message.input_message(path = message_path,message = 'update file list in local : %s'  %str(file_list))
+    #logging_message.input_message(path = message_path,message = 'updated file list in jira : %s'  %str(uploaded_file_list))
     for file in file_list:
         file_path = os.path.join(tmp_path,file)
         logging.debug('upload file - %s' %file)
         if file in uploaded_file_list:
             logging.debug('it already uploaded - %s' %file)
-            logging_message.input_message(path = message_path,message = 'it already uploaded - %s' %file)
+            #logging_message.input_message(path = message_path,message = 'it already uploaded - %s' %file)
         else:
             logging.debug('start upload - %s' %file)
-            logging_message.input_message(path = message_path,message = 'start upload - %s' %file) 
+            #logging_message.input_message(path = message_path,message = 'start upload - %s' %file) 
             upload_attachment_result = jira_rest_handler.upload_attachment(key,file_path)
             logging.debug(upload_attachment_result)
     logging_message.input_message(path = message_path,message = 'upload done!')
@@ -113,7 +113,7 @@ def update_fleid_by_find_list(text,search_listaaa,jira_ticket_key,jira_rest_hand
     logging.debug('searching reg result: %s'%searching_reg_result)
     if searching_reg_result is not None:
         text = searching_reg_result.group(0)
-        logging_message.input_message(path = message_path,message = 'find something search_reg: %s'%text)
+        #logging_message.input_message(path = message_path,message = 'find something search_reg: %s'%text)
         return_flag = False
         dict_search_by_search_keys = {}
         for search_key in search_keys:
@@ -122,9 +122,9 @@ def update_fleid_by_find_list(text,search_listaaa,jira_ticket_key,jira_rest_hand
                 if search_temp is not None:
                     dict_search_by_search_keys[search_key] = search_temp
                     logging.debug('find something by search_keys list: %s'%str(search_temp))
-                    logging_message.input_message(path = message_path,message = 'find something by search_keys list: %s'%str(search_temp.group(0)))
+                    #logging_message.input_message(path = message_path,message = 'find something by search_keys list: %s'%str(search_temp.group(0)))
                     update_fleid = ast.literal_eval(str(change_to_jira).replace('input',search_key))
-                    logging_message.input_message(path = message_path,message = 'start update feild: %s'%str(update_fleid))
+                    #logging_message.input_message(path = message_path,message = 'start update feild: %s'%str(update_fleid))
                     logging.debug('start update feild: %s'%str(update_fleid))
                     jira_rest_handler.updateissue(jira_ticket_key,update_fleid)                    
                     return_flag = True
@@ -135,7 +135,7 @@ def update_fleid_by_find_list(text,search_listaaa,jira_ticket_key,jira_rest_hand
         
     else:
         logging.debug("there is no any string by search_key: %s - search_reg: %s" %(jira_ticket_key,search_reg))
-        logging_message.input_message(path = message_path,message = "there is no any string by search_key: %s - search_reg: %s" %(jira_ticket_key,search_reg)) 
+        #logging_message.input_message(path = message_path,message = "there is no any string by search_key: %s - search_reg: %s" %(jira_ticket_key,search_reg)) 
     return 0
 
 def upload_label_field(jira_rest_handler,key):
@@ -148,7 +148,6 @@ def upload_label_field(jira_rest_handler,key):
     #logging.debug('%s' %str(find_list))
     logging_message.input_message(path = message_path,message = '==start feild update!==')
     for find in find_list['summary']['fields']:
-        logging_message.input_message(path = message_path,message = "start find ['summary']['fields']: %s"%str(find))
         search_listaaa = find_list['summary']['fields'][find]
         update_fleid_by_find_list(summary,search_listaaa,key,jira_rest_handler)
         
@@ -156,7 +155,7 @@ def upload_label_field(jira_rest_handler,key):
         logging.debug("start find ['description']['fields']: %s"%str(find))
         search_listaaa = find_list['description']['fields'][find]
         update_fleid_by_find_list(description,search_listaaa,key,jira_rest_handler)
-    logging_message.input_message(path = message_path,message = '==feild update done!==')
+    #logging_message.input_message(path = message_path,message = '==feild update done!==')
 
     logging_message.input_message(path = message_path,message = '==start labels update!==')
     for find in find_list['summary']['labels']:
@@ -166,8 +165,7 @@ def upload_label_field(jira_rest_handler,key):
     for a in find_list['description']['labels']:
         logging.debug("start find ['summary']['labels']: %s"%str(find))
         logging.debug("['description']['labels'] is %s"%a)
-    logging_message.input_message(path = message_path,message = '==labels update done!==')
-        
+    #logging_message.input_message(path = message_path,message = '==labels update done!==')    
     return 0
 
     for find_key in find_list.keys():
@@ -234,13 +232,14 @@ def sync_attachment(user=None, password = None, query = None):
     result = jira_rest_handler.searchIssueByQuery(query=query)
     for key in result:
         issuetype = result[key]['issuetype']['name']
-        logging_message.input_message(path = message_path,message = 'start to check %s' %key)
         logging.debug('start key - %s and issuetype - %s' %(key,issuetype))
         #progress which issuetype
         if issuetype == 'BS3':
+            logging_message.input_message(path = message_path,message = 'start to check %s' %key)
             upload_label_field(jira_rest_handler,key)
             sync_file_server_jira(jira_rest_handler,key)
-        
+            logging.debug('key - %s and issuetype - %s done!\n' %(key,issuetype))
+            logging_message.input_message(path = message_path,message = 'end to check %s\n' %key)
         elif issuetype == 'BUG':
             ticket_info = jira_rest_handler.searchIssueByKey(key)['fields']
             assignee = jira_rest_handler.searchIssueByKey(key)['fields']['assignee']
@@ -249,8 +248,7 @@ def sync_attachment(user=None, password = None, query = None):
             logging.info(reporter)
         else:
             pass
-        logging.debug('key - %s and issuetype - %s done!\n' %(key,issuetype))
-        logging_message.input_message(path = message_path,message = 'end to check %s\n' %key)
+        
 
 # =====================================================================================================
 # =====================================================================================================

@@ -38,7 +38,7 @@ class MyMainWindow(QMainWindow):
     def initUI(self):
         self.statusBar().showMessage('Ready')
         self.setWindowTitle(self.title)
-        self.setGeometry(200, 200, 1200,600)
+        self.setGeometry(200, 200, 600, 480)
         #self.setFixedSize(600, 480)
         self.form_widget = FormWidget(self,self.statusBar())
         self.setCentralWidget(self.form_widget)
@@ -49,6 +49,7 @@ class FormWidget(QWidget):
         super(FormWidget, self).__init__(parent)
         self.user = ''
         self.statusbar_status = 'not logged in'
+        self.session = None
         self.session_info = None
         self.logging_temp = None
         self.statusbar = statusbar
@@ -103,16 +104,14 @@ class FormWidget(QWidget):
         #login / import event
         self.login_import_button.clicked.connect(self.on_start)
         self.line_password.returnPressed.connect(self.on_start)
-    
+
+
     @pyqtSlot()
     def on_start(self):
-        if self.statusbar_status == 'not logged in':
+        def try_login():
             self.user = self.line_id.text()
             self.password = self.line_password.text()
-            logging_message.input_message(path = message_path,message = 'user: %s password: %s' %(self.user,'self.password'))
-            self.session_list = jira_rest.initsession(self.user, self.password)
-            self.session = self.session_list[0]
-            self.session_info = self.session_list[1]
+            self.session, self.session_info = jira_rest.initsession(self.user, self.password)
             #fail to login
             if self.session_info == None:
                 logging_message.input_message(path = message_path,message = "Login Fail")
@@ -123,25 +122,30 @@ class FormWidget(QWidget):
                 self.login_import_button.setText('Jira\nSync')
                 self.statusbar_status = 'logged in'
                 logging_message.input_message(path = message_path,message = 'login succeed, please start to attach files~!')
-                logging_message.input_message(path = message_path,message = 'user: %s password: %s' %(self.user,'self.password'))
                 config_data['id'] = self.user
                 config_data['password'] = self.password
                 config.save_config(config_data,config_path)
                 self.line_id.setReadOnly(1)
                 self.line_password.setReadOnly(1)
                 self.line_query.setReadOnly(0)
-        else:
+            return 0
             
-            def bs3_syncment_start():
-                self.statusbar_status = 'start file attachemnt~'
-                self.query = self.line_query.text()
-                logging_message.input_message(path = message_path,message = 'start file attachemnt~')
-                logging_message.input_message(path = message_path,message = 'query is %s' %self.query)
-                bs3_sync.sync_attachment(self.user,self.password,self.query)
-                #save query 
-                config_data['last_query'] = self.query
-                config.save_config(config_data,config_path)
-                return 0
+        def bs3_syncment_start():
+            self.login_import_button.setEnabled(False)
+            self.statusbar_status = 'start file attachemnt~'
+            self.query = self.line_query.text()
+            logging_message.input_message(path = message_path,message = 'start file attachemnt~')
+            logging_message.input_message(path = message_path,message = 'query is %s' %self.query)
+            bs3_sync.sync_attachment(self.user,self.password,self.query)
+            #save query 
+            config_data['last_query'] = self.query
+            config.save_config(config_data,config_path)
+            self.login_import_button.setEnabled(True)
+            return 0
+
+        if self.statusbar_status == 'not logged in':
+            try_login()
+        else:
             if self.query == '':
                 logging_message.input_message(path = message_path,message = 'query is empty, please checek query')
             else:
