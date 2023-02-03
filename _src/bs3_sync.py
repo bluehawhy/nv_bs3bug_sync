@@ -28,10 +28,10 @@ bs3_path = config_data['bs3_path']
 # this is file copy from navis server ans sync to jira
 # =====================================================================================================
 def sync_file_server_jira(jira_rest_handler,key):
-    logging_message.input_message(path = message_path,message = '==start upload file into jira - key %s==' %key)
+    logging_message.input_message(path = message_path,message = '== start upload file ==')
     dante_id = jira_rest_handler.searchIssueByKey(key)['fields']['customfield_12304']
     server_path = os.path.join(bs3_path,dante_id)
-    logging_message.input_message(path = message_path,message = 'start copy file from server to local')
+    #logging_message.input_message(path = message_path,message = 'start copy file from server to local')
     return_files = []
     #remove folder 
     try:
@@ -89,9 +89,8 @@ def sync_file_server_jira(jira_rest_handler,key):
             #logging_message.input_message(path = message_path,message = 'start upload - %s' %file) 
             upload_attachment_result = jira_rest_handler.upload_attachment(key,file_path)
             logging.debug(upload_attachment_result)
-    logging_message.input_message(path = message_path,message = 'upload done!')
-    logging.debug('upload done!')
-    logging_message.input_message(path = message_path,message = '==upload file into jira done! - key %s==' %key)
+    logging_message.input_message(path = message_path,message = '== upload done ==')
+    logging.debug('== upload done ==')
     return 0
 # =====================================================================================================
 # =====================================================================================================
@@ -124,7 +123,7 @@ def update_fleid_by_find_list(text,search_listaaa,jira_ticket_key,jira_rest_hand
                     logging.debug('find something by search_keys list: %s'%str(search_temp))
                     #logging_message.input_message(path = message_path,message = 'find something by search_keys list: %s'%str(search_temp.group(0)))
                     update_fleid = ast.literal_eval(str(change_to_jira).replace('input',search_key))
-                    #logging_message.input_message(path = message_path,message = 'start update feild: %s'%str(update_fleid))
+                    logging_message.input_message(path = message_path,message = 'start update feild: %s'%str(update_fleid))
                     logging.debug('start update feild: %s'%str(update_fleid))
                     jira_rest_handler.updateissue(jira_ticket_key,update_fleid)                    
                     return_flag = True
@@ -143,7 +142,7 @@ def upload_label_field(jira_rest_handler,key):
     summary = jira_rest_handler.searchIssueByKey(key)['fields']['summary']
     description = jira_rest_handler.searchIssueByKey(key)['fields']['description']
     find_list = config_data["find_list"]
-    logging_message.input_message(path = message_path,message = "summary is: %s" %summary)
+    #logging_message.input_message(path = message_path,message = "summary is: %s" %summary)
     #logging.debug('%s' %description)
     #logging.debug('%s' %str(find_list))
     logging_message.input_message(path = message_path,message = '==start feild update!==')
@@ -157,7 +156,7 @@ def upload_label_field(jira_rest_handler,key):
         update_fleid_by_find_list(description,search_listaaa,key,jira_rest_handler)
     #logging_message.input_message(path = message_path,message = '==feild update done!==')
 
-    logging_message.input_message(path = message_path,message = '==start labels update!==')
+    #logging_message.input_message(path = message_path,message = '==start labels update!==')
     for find in find_list['summary']['labels']:
         logging.debug("start find ['summary']['labels']: %s"%str(find))
         search_listaaa = find_list['summary']['fields'][find]

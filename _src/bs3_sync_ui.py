@@ -6,7 +6,7 @@ import threading
 from PyQt5.QtWidgets import QMainWindow, QApplication
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QWidget
 from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton, QGridLayout, QPlainTextEdit, QFileDialog, QMessageBox, QTextBrowser
-from PyQt5.QtCore import pyqtSlot, QTimer, QTime
+from PyQt5.QtCore import pyqtSlot, QTimer, QTime, Qt
 
 from PyQt5.QtGui import QTextCursor
 from datetime import date
@@ -32,6 +32,7 @@ class MyMainWindow(QMainWindow):
         self.title = title
         logging.debug('qss_path is %s' %qss_path)
         self.setStyleSheet(open(qss_path, "r").read())
+        #self.setWindowFlags(Qt.FramelessWindowHint)
         self.initUI()
         self.show()
 
@@ -40,18 +41,19 @@ class MyMainWindow(QMainWindow):
         self.setWindowTitle(self.title)
         self.setGeometry(200, 200, 600, 480)
         #self.setFixedSize(600, 480)
-        self.form_widget = FormWidget(self,self.statusBar())
+        self.form_widget = FormWidget(self,self.statusBar(),self.title)
         self.setCentralWidget(self.form_widget)
 
 
 class FormWidget(QWidget):
-    def __init__(self, parent, statusbar):
+    def __init__(self, parent, statusbar,title):
         super(FormWidget, self).__init__(parent)
         self.user = ''
         self.statusbar_status = 'not logged in'
         self.session = None
         self.session_info = None
         self.logging_temp = None
+        self.title = title
         self.statusbar = statusbar
         self.initUI() 
         self.show()
@@ -63,6 +65,21 @@ class FormWidget(QWidget):
         self.setStyleSheet(open(qss_path, "r").read())
         # make layout
         self.layout_main = QVBoxLayout(self)
+
+        #menu layout
+        self.menu_layout = QHBoxLayout(self)
+        self.qlabel_title = QLabel(self.title)
+        self.menu_layout.addWidget(self.qlabel_title)
+
+        self.menu_button_layout = QHBoxLayout(self)
+        self.quit_button = QPushButton('X')
+        self.quit_button.setFixedSize(30,30)
+        self.menu_button_layout.addWidget(self.quit_button)
+        self.menu_layout.addLayout(self.menu_button_layout)
+        #self.layout_main.addLayout(self.menu_layout)
+
+
+
         # login page layout
         self.login_layout = QHBoxLayout(self)
         self.login_layout_id_pw = QGridLayout(self)
