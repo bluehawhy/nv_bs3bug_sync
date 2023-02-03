@@ -41,8 +41,8 @@ def debug_app():
 
 def start_app():
     user = config_data['id']
-    os.system('color 0A') if user != 'miskang' else None
-    os.system('mode con cols=70 lines=5') if user != 'miskang' else None
+    #os.system('color 0A') if user != 'miskang' else None
+    #os.system('mode con cols=70 lines=5') if user != 'miskang' else None
     if os.path.isfile(message_path):
         logging_message.remove_message(message_path)
     for revision in revision_list:
