@@ -25,6 +25,7 @@ revision_list=[
     'v1.0 (2022-11-18) : initial release',
     'v1.1 (2023-02-01) : disable button during sync',
     '                    change logs on UI',
+    'v2.0 (2023-06-26) : modify for each project',
     '==============================================================================='
     ]
 
@@ -32,7 +33,7 @@ revision_list=[
 def debug_app():
     user = config_data['id']
     password = config_data['password']
-    query = "key in (test)"
+    query = '--1'
     def test2():
         bs3_sync.sync_attachment(user,password,query)
         return 0
@@ -53,7 +54,7 @@ def start_app():
 
 if __name__ =='__main__':
     try:
-        start_app()
+        debug_app()
     except Exception as E:
         logging_message.input_message(path = message_path,message = version)
 

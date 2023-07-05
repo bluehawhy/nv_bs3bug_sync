@@ -22,43 +22,43 @@ config_data =config.load_config(config_path)
 
 message_path = config_data['message_path']
 tmp_path = config_data['tmp_path']
-bs3_path = config_data['bs3_path']
 
 # =====================================================================================================
 # this is file copy from navis server ans sync to jira
 # =====================================================================================================
-def sync_file_server_jira(jira_rest_handler,key):
-    logging_message.input_message(path = message_path,message = '== start upload file ==')
-    dante_id = jira_rest_handler.searchIssueByKey(key)['fields']['customfield_12304']
-    server_path = os.path.join(bs3_path,dante_id)
-    #logging_message.input_message(path = message_path,message = 'start copy file from server to local')
+
+def ignore_file_list(file):
+    ignore_list = config_data['ignore_list']
+    result = False
+    for ig in ignore_list:
+        if ig in file:
+            result = True
+    return result
+
+def download_files_in_server(server_path=None, local_path=None):
+    logging.debug(server_path)
+    logging.debug(local_path)
     return_files = []
-    #remove folder 
+    #remove local folder 
     try:
-        shutil.rmtree(tmp_path) if os.path.exists(tmp_path) else None
-        logging.debug('remove temp folder')
-        os.makedirs(tmp_path)
+        shutil.rmtree(local_path) if os.path.exists(local_path) else logging.debug('no local folder')
+        os.makedirs(local_path)
     except:
-        pass   
-    # =====================================================================================================
+        pass
     # =====================================================================================================
     #download from server
     # =====================================================================================================
-    #logging.debug(server_path)
+    # check file list in server
     file_list = os.listdir(server_path) if os.path.exists(server_path) else []
-    def find_sorting(file):
-        sorting_list = config_data['sorting_list']
-        result = False
-        for sorting in sorting_list:
-            if sorting in file:
-                result = True
-        return result
-    file_list = [file for file in file_list if find_sorting(file) is True]
+    logging.debug('files in server : %s' %str(file_list))
+    # ignore files 
+    file_list = [file for file in file_list if ignore_file_list(file) is True]
+    logging.debug('modified files in server : %s' %str(file_list))
     for file in file_list:
         file_path = os.path.join(server_path,file)
         #check file size
         file_size = os.path.getsize(file_path)
-        logging.debug('check file size : %d' %file_size)
+        logging.debug('%s size : %d' %(file,file_size))
         #check dir or file
         if not os.path.isdir(file_path):
             if file_size <= 200000000:
@@ -66,19 +66,18 @@ def sync_file_server_jira(jira_rest_handler,key):
                 shutil.copy2(file_path,tmp_path)
                 #add file list
                 return_files.append(file_path)
-    logging_message.input_message(path = message_path,message = 'copy done!')
-    logging.debug('copy done!')
-    # =====================================================================================================
+    return return_files
 
+def upload_files_into_jira(jira_rest_handler,key,local_file_list):
     # =====================================================================================================
     #upload file to jira
     # =====================================================================================================
     uploaded_file_list = jira_rest_handler.get_attachment(key)
-    logging.debug("update file list in local : %s" %str(file_list))
+    logging.debug("update file list in local : %s" %str(local_file_list))
     logging.debug("updated file list in jira : %s" %str(uploaded_file_list))
     #logging_message.input_message(path = message_path,message = 'update file list in local : %s'  %str(file_list))
     #logging_message.input_message(path = message_path,message = 'updated file list in jira : %s'  %str(uploaded_file_list))
-    for file in file_list:
+    for file in local_file_list:
         file_path = os.path.join(tmp_path,file)
         logging.debug('upload file - %s' %file)
         if file in uploaded_file_list:
@@ -89,10 +88,18 @@ def sync_file_server_jira(jira_rest_handler,key):
             #logging_message.input_message(path = message_path,message = 'start upload - %s' %file) 
             upload_attachment_result = jira_rest_handler.upload_attachment(key,file_path)
             logging.debug(upload_attachment_result)
+    return 0
+
+def sync_file_server_jira(jira_rest_handler,key,bs3_path):
+    logging_message.input_message(path = message_path,message = '== start upload file ==')
+    dante_id = jira_rest_handler.searchIssueByKey(key)['fields']['customfield_12304']
+    server_path = os.path.join(bs3_path,dante_id)
+    local_file_list = download_files_in_server(server_path=server_path, local_path=tmp_path)
+    logging_message.input_message(path = message_path,message = 'download done!')
+    logging.debug('download done!')
+    upload_files_into_jira(jira_rest_handler,key,local_file_list)
     logging_message.input_message(path = message_path,message = '== upload done ==')
     logging.debug('== upload done ==')
-    return 0
-# =====================================================================================================
 # =====================================================================================================
 
 
@@ -141,7 +148,8 @@ def upload_label_field(jira_rest_handler,key):
     logging.debug('this is key %s' %key)
     summary = jira_rest_handler.searchIssueByKey(key)['fields']['summary']
     description = jira_rest_handler.searchIssueByKey(key)['fields']['description']
-    find_list = config_data["find_list"]
+    #find project 
+    find_list = config_data[key.spilt("-")[0]]["find_list"]
     #logging_message.input_message(path = message_path,message = "summary is: %s" %summary)
     #logging.debug('%s' %description)
     #logging.debug('%s' %str(find_list))
@@ -232,11 +240,12 @@ def sync_attachment(user=None, password = None, query = None):
     for key in result:
         issuetype = result[key]['issuetype']['name']
         logging.debug('start key - %s and issuetype - %s' %(key,issuetype))
-        #progress which issuetype
         if issuetype == 'BS3':
             logging_message.input_message(path = message_path,message = 'start to check %s' %key)
-            upload_label_field(jira_rest_handler,key)
-            sync_file_server_jira(jira_rest_handler,key)
+            bs3_path = config_data['project'][str(key).split("-")[0]]['bs3_path']
+            logging.debug(bs3_path)
+            sync_file_server_jira(jira_rest_handler,key,bs3_path)
+            #upload_label_field(jira_rest_handler,key)
             logging.debug('key - %s and issuetype - %s done!\n' %(key,issuetype))
             logging_message.input_message(path = message_path,message = 'end to check %s\n' %key)
         elif issuetype == 'BUG':
@@ -251,4 +260,5 @@ def sync_attachment(user=None, password = None, query = None):
 
 # =====================================================================================================
 # =====================================================================================================
+
 

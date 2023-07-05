@@ -149,15 +149,17 @@ class FormWidget(QWidget):
             
         def bs3_syncment_start():
             self.login_import_button.setEnabled(False)
-            self.statusbar_status = 'start file attachemnt~'
+            self.statusbar_status = 'bs sync~'
             self.query = self.line_query.text()
-            logging_message.input_message(path = message_path,message = 'start file attachemnt~')
+            logging_message.input_message(path = message_path,message = 'start bs sync~')
             logging_message.input_message(path = message_path,message = 'query is %s' %self.query)
             bs3_sync.sync_attachment(self.user,self.password,self.query)
             #save query 
             config_data['last_query'] = self.query
             config.save_config(config_data,config_path)
+            logging_message.input_message(path = message_path,message = 'bs sync done~')
             self.login_import_button.setEnabled(True)
+            self.statusbar_status = 'logged in'
             return 0
 
         if self.statusbar_status == 'not logged in':
