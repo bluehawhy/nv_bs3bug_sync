@@ -1,30 +1,41 @@
 #!/usr/bin/python
 import os
 import sys
-import time
 import threading
-from PyQt5.QtWidgets import QMainWindow, QApplication
+from PyQt5.QtWidgets import QMainWindow
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QWidget
-from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton, QGridLayout, QPlainTextEdit, QFileDialog, QMessageBox, QTextBrowser
-from PyQt5.QtCore import pyqtSlot, QTimer, QTime, Qt
+from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton, QGridLayout, QMessageBox, QTextBrowser, QComboBox
+from PyQt5.QtCore import pyqtSlot, QTimer, QTime
 
 from PyQt5.QtGui import QTextCursor
-from datetime import date
 
 
-from _src._api import filepath, logger, jira_rest, config, logging_message
+
+#add internal libary
 from _src import bs3_sync
 
-logging = logger.logger
-logging_file_name = logger.log_full_name
+
+refer_api = "local"
+#refer_api = "global"
+
+if refer_api == "global":
+    sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))))
+    from _api import loggas, configus, zyra
+if refer_api == "local":
+    from _src._api import loggas, configus, zyra
+
+
+
+logging = loggas.logger
+logging_file_name = loggas.log_full_name
 
 
 #set config
-
 config_path = os.path.join('static','config','config.json')
 qss_path = os.path.join('static','css','style.qss')
-config_data =config.load_config(config_path)
-message_path = config_data['message_path']
+bs3_config_path = os.path.join('static','config','bs3_sync_config.json')
+
+message_path = configus.load_config(config_path)['message_path']
 
 class MyMainWindow(QMainWindow):
     def __init__(self, title):
@@ -55,6 +66,7 @@ class FormWidget(QWidget):
         self.logging_temp = None
         self.title = title
         self.statusbar = statusbar
+        self.status_sync = None
         self.initUI() 
         self.show()
         self.timer = QTimer(self)
@@ -62,6 +74,8 @@ class FormWidget(QWidget):
         self.timer.start(1000)
 
     def initUI(self):
+        config_data = configus.load_config(config_path)
+        bs3_config_data = configus.load_config(bs3_config_path)
         self.setStyleSheet(open(qss_path, "r").read())
         # make layout
         self.layout_main = QVBoxLayout(self)
@@ -77,8 +91,6 @@ class FormWidget(QWidget):
         self.menu_button_layout.addWidget(self.quit_button)
         self.menu_layout.addLayout(self.menu_button_layout)
         #self.layout_main.addLayout(self.menu_layout)
-
-
 
         # login page layout
         self.login_layout = QHBoxLayout(self)
@@ -101,19 +113,30 @@ class FormWidget(QWidget):
         # add query layout
         self.layout_query = QHBoxLayout(self)
         self.qlabel_query = QLabel('Query : ')
-        self.query = config_data['last_query']
+        self.query = bs3_config_data['last_query']
         self.line_query = QLineEdit(self.query)
         self.line_query.setReadOnly(1)
         self.layout_query.addWidget(self.qlabel_query)
         self.layout_query.addWidget(self.line_query)
         self.layout_main.addLayout(self.layout_query)
+
+        # add sync layout
+        self.status_sync = bs3_config_data['file_sync']
+        self.layout_sync = QHBoxLayout(self)
+        self.qlabel_sync = QLabel('File Sync : ')
+        self.combo_sync = QComboBox()
+        self.combo_sync.addItems(['True','False'])
+        self.combo_sync.setCurrentText(bs3_config_data['file_sync'])
+        self.layout_query.addWidget(self.qlabel_sync)
+        self.layout_query.addWidget(self.combo_sync)
+        self.layout_main.addLayout(self.layout_sync)
+
+        self.combo_sync.currentIndexChanged.connect(self.sync_status)
         
         # add log layout
         self.qtext_log_browser = QTextBrowser()
         self.qtext_log_browser.setReadOnly(1)
         self.layout_main.addWidget(self.qtext_log_browser)
-
-
 
         #set layout
         self.setLayout(self.layout_main)
@@ -123,41 +146,49 @@ class FormWidget(QWidget):
         self.line_password.returnPressed.connect(self.on_start)
 
 
+    def sync_status(self):
+        bs3_config_data = configus.load_config(bs3_config_path)
+        #logging.info(self.combo_sync.currentText())
+        bs3_config_data['file_sync'] = self.combo_sync.currentText()
+        bs3_config_data = configus.save_config(bs3_config_data,bs3_config_path)
+
     @pyqtSlot()
     def on_start(self):
         def try_login():
+            config_data = configus.load_config(config_path)
             self.user = self.line_id.text()
             self.password = self.line_password.text()
-            self.session, self.session_info = jira_rest.initsession(self.user, self.password)
+            self.session,self.session_info, self.status_login = zyra.initsession(self.user, self.password, config_data['jira_url'])
             #fail to login
-            if self.session_info == None:
-                logging_message.input_message(path = message_path,message = "Login Fail")
-                logging_message.input_message(path = message_path,message = "please check your id and password or check internet connection")
+            if self.status_login is False:
+                loggas.input_message(path = message_path,message = "Login Fail")
+                loggas.input_message(path = message_path,message = "please check your id and password or check internet connection")
                 QMessageBox.about(self, "Login Fail", "please check your id and password or check internet connection")
             #if loggin success
             else:
                 self.login_import_button.setText('Jira\nSync')
                 self.statusbar_status = 'logged in'
-                logging_message.input_message(path = message_path,message = 'login succeed, please start to attach files~!')
+                loggas.input_message(path = message_path,message = 'login succeed, please start to attach files~!')
                 config_data['id'] = self.user
                 config_data['password'] = self.password
-                config.save_config(config_data,config_path)
+                config_data = configus.save_config(config_data,config_path)
                 self.line_id.setReadOnly(1)
                 self.line_password.setReadOnly(1)
                 self.line_query.setReadOnly(0)
             return 0
             
         def bs3_syncment_start():
+            bs3_config_data = configus.load_config(bs3_config_path)
             self.login_import_button.setEnabled(False)
             self.statusbar_status = 'bs sync~'
             self.query = self.line_query.text()
-            logging_message.input_message(path = message_path,message = 'start bs sync~')
-            logging_message.input_message(path = message_path,message = 'query is %s' %self.query)
-            bs3_sync.sync_attachment(self.user,self.password,self.query)
+            loggas.input_message(path = message_path,message = 'start bs sync~')
+            loggas.input_message(path = message_path,message = 'query is %s' %self.query)
+            bs3_sync.sync_bs3bug(self.user,self.password,self.query)
             #save query 
-            config_data['last_query'] = self.query
-            config.save_config(config_data,config_path)
-            logging_message.input_message(path = message_path,message = 'bs sync done~')
+            bs3_config_data['last_query'] = self.query
+            bs3_config_data = configus.save_config(bs3_config_data,bs3_config_path)
+            loggas.input_message(path = message_path,message = 'bs sync done~')
             self.login_import_button.setEnabled(True)
             self.statusbar_status = 'logged in'
             return 0
@@ -166,7 +197,7 @@ class FormWidget(QWidget):
             try_login()
         else:
             if self.query == '':
-                logging_message.input_message(path = message_path,message = 'query is empty, please checek query')
+                loggas.input_message(path = message_path,message = 'query is empty, please checek query')
             else:
                 thread_import = threading.Thread(target=bs3_syncment_start)
                 thread_import.start()

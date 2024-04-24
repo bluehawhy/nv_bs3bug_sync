@@ -6,54 +6,66 @@
 #  - if exist -> skip
 # author: miskang@navis-ams.com
 
-from cgitb import lookup
-import os, re
+import os, re, sys
 import shutil
-import ast
-from _src._api import jira_rest, config
-from _src._api import logger, logging_message
+
+refer_api = "local"
+#refer_api = "global"
+
+if refer_api == "global":
+    sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))))
+    from _api import loggas, configus, zyra
+if refer_api == "local":
+    from _src._api import loggas, configus, zyra
 
 
-logging = logger.logger
+logging = loggas.logger
 
+logging= loggas.logger
 config_path = os.path.join('static','config','config.json')
-qss_path = os.path.join('static','css','style.qss')
-config_data =config.load_config(config_path)
+bs3_config_path = os.path.join('static','config','bs3_sync_config.json')
+message_path =configus.load_config(config_path)['message_path']
 
-message_path = config_data['message_path']
-tmp_path = config_data['tmp_path']
+config_data = configus.load_config(config_path)
+bs3_config_data = configus.load_config(bs3_config_path)
+
 
 # =====================================================================================================
 # this is file copy from navis server ans sync to jira
 # =====================================================================================================
 
-def ignore_file_list(file):
-    ignore_list = config_data['ignore_list']
+def ignore_file_list(file = None , ignore_list = None):
     result = False
-    for ig in ignore_list:
-        if ig in file:
-            result = True
+    ignore_list = [x.lower() for x in ignore_list]
+    file_extension = str(os.path.splitext(file)[1]).replace('.','').lower()
+    if file_extension in ignore_list:
+        result = True    
     return result
 
-def download_files_in_server(server_path=None, local_path=None):
-    logging.debug(server_path)
-    logging.debug(local_path)
+def download_files_from_server(server_path = None, local_path = None, ignore_list= None):
     return_files = []
-    #remove local folder 
+    #renew local folder
     try:
         shutil.rmtree(local_path) if os.path.exists(local_path) else logging.debug('no local folder')
         os.makedirs(local_path)
-    except:
+    except Exception as E:
+        logging.critical(E)
         pass
+    
     # =====================================================================================================
     #download from server
     # =====================================================================================================
     # check file list in server
     file_list = os.listdir(server_path) if os.path.exists(server_path) else []
-    logging.debug('files in server : %s' %str(file_list))
+    logging.debug(f'flie list - {str(file_list)}')
+    logging.debug(f'ignore list - {ignore_list}')
     # ignore files 
-    file_list = [file for file in file_list if ignore_file_list(file) is True]
+    for file in file_list:
+        logging.info(f'{file} - {ignore_file_list(file = file, ignore_list =ignore_list)}')
+    file_list = [file for file in file_list if ignore_file_list(file = file, ignore_list =ignore_list) is False]
+
     logging.debug('modified files in server : %s' %str(file_list))
+    
     for file in file_list:
         file_path = os.path.join(server_path,file)
         #check file size
@@ -63,42 +75,52 @@ def download_files_in_server(server_path=None, local_path=None):
         if not os.path.isdir(file_path):
             if file_size <= 200000000:
                 #copy file
-                shutil.copy2(file_path,tmp_path)
+                shutil.copy2(file_path,local_path)
                 #add file list
                 return_files.append(file_path)
     return return_files
 
-def upload_files_into_jira(jira_rest_handler,key,local_file_list):
+def upload_files_into_jira(zyra_handler,key,local_file_list,local_path):
     # =====================================================================================================
     #upload file to jira
     # =====================================================================================================
-    uploaded_file_list = jira_rest_handler.get_attachment(key)
+    local_file_list = os.listdir(local_path)
+    uploaded_file_list = zyra_handler.get_attachment(key)
     logging.debug("update file list in local : %s" %str(local_file_list))
     logging.debug("updated file list in jira : %s" %str(uploaded_file_list))
-    #logging_message.input_message(path = message_path,message = 'update file list in local : %s'  %str(file_list))
-    #logging_message.input_message(path = message_path,message = 'updated file list in jira : %s'  %str(uploaded_file_list))
+    #loggas.input_message(path = message_path,message = 'update file list in local : %s'  %str(file_list))
+    #loggas.input_message(path = message_path,message = 'updated file list in jira : %s'  %str(uploaded_file_list))
+    #logging.debug('upload file - %s' %tmp_path)
+    
     for file in local_file_list:
-        file_path = os.path.join(tmp_path,file)
         logging.debug('upload file - %s' %file)
+        file_path = os.path.join(local_path,file)
         if file in uploaded_file_list:
             logging.debug('it already uploaded - %s' %file)
-            #logging_message.input_message(path = message_path,message = 'it already uploaded - %s' %file)
+            #loggas.input_message(path = message_path,message = 'it already uploaded - %s' %file)
         else:
             logging.debug('start upload - %s' %file)
-            #logging_message.input_message(path = message_path,message = 'start upload - %s' %file) 
-            upload_attachment_result = jira_rest_handler.upload_attachment(key,file_path)
+            #loggas.input_message(path = message_path,message = 'start upload - %s' %file) 
+            upload_attachment_result = zyra_handler.upload_attachment(key,file_path)
             logging.debug(upload_attachment_result)
     return 0
 
-def sync_file_server_jira(jira_rest_handler,key,bs3_path):
-    logging_message.input_message(path = message_path,message = '== start upload file ==')
-    dante_id = jira_rest_handler.searchIssueByKey(key)['fields']['customfield_12304']
+# =====================================================================================================
+def sync_file_server_jira(zyra_handler,key,file_sync_info):
+    bs3_path = file_sync_info['bs3_path']
+    tmp_path = file_sync_info['tmp_path']
+    ignore_list = file_sync_info['ignore_list']
+    loggas.input_message(path = message_path,message = '== start upload file ==')
+    logging.debug('== start upload file ==')
+    dante_id = zyra_handler.searchIssueByKey(key)['fields']['customfield_12304']
     server_path = os.path.join(bs3_path,dante_id)
-    local_file_list = download_files_in_server(server_path=server_path, local_path=tmp_path)
-    logging_message.input_message(path = message_path,message = 'download done!')
-    logging.debug('download done!')
-    upload_files_into_jira(jira_rest_handler,key,local_file_list)
-    logging_message.input_message(path = message_path,message = '== upload done ==')
+    loggas.input_message(path = message_path,message = f'start download from server')
+    logging.debug(f'start download from server - {server_path}')
+    local_file_list = download_files_from_server(server_path = server_path, local_path = tmp_path, ignore_list= ignore_list)
+    loggas.input_message(path = message_path,message = f'download done!')
+    logging.debug(f'download done!')
+    upload_files_into_jira(zyra_handler,key,local_file_list,local_path = tmp_path)
+    loggas.input_message(path = message_path,message = '== upload done ==')
     logging.debug('== upload done ==')
 # =====================================================================================================
 
@@ -106,123 +128,64 @@ def sync_file_server_jira(jira_rest_handler,key,bs3_path):
 # =====================================================================================================
 # this is find field and labels in ticket
 # =====================================================================================================
-def update_fleid_by_find_list(text,search_listaaa,jira_ticket_key,jira_rest_handler):
-    # get searching list
-    logging.debug("list information: %s"%str(search_listaaa))
-    search_reg = search_listaaa['search_reg']
-    search_keys = search_listaaa['search_keys']
-    change_to_jira = search_listaaa['result']
-    #logging.debug("searchs is %s"%str(search_keys))
-    #logging.debug("result is %s"%str(result))
-    # ==================================================
-    searching_reg_result = re.search(search_reg.lower(),text.lower())
-    logging.debug('searching reg result: %s'%searching_reg_result)
-    if searching_reg_result is not None:
-        text = searching_reg_result.group(0)
-        #logging_message.input_message(path = message_path,message = 'find something search_reg: %s'%text)
-        return_flag = False
-        dict_search_by_search_keys = {}
-        for search_key in search_keys:
-            for inner_search_key in search_keys[search_key]:
-                search_temp = re.search(inner_search_key.lower(),text.lower())
-                if search_temp is not None:
-                    dict_search_by_search_keys[search_key] = search_temp
-                    logging.debug('find something by search_keys list: %s'%str(search_temp))
-                    #logging_message.input_message(path = message_path,message = 'find something by search_keys list: %s'%str(search_temp.group(0)))
-                    update_fleid = ast.literal_eval(str(change_to_jira).replace('input',search_key))
-                    logging_message.input_message(path = message_path,message = 'start update feild: %s'%str(update_fleid))
-                    logging.debug('start update feild: %s'%str(update_fleid))
-                    jira_rest_handler.updateissue(jira_ticket_key,update_fleid)                    
-                    return_flag = True
-                if return_flag == True:
-                    break
-            if return_flag == True:
-                break
-        
-    else:
-        logging.debug("there is no any string by search_key: %s - search_reg: %s" %(jira_ticket_key,search_reg))
-        #logging_message.input_message(path = message_path,message = "there is no any string by search_key: %s - search_reg: %s" %(jira_ticket_key,search_reg)) 
-    return 0
-
-def upload_label_field(jira_rest_handler,key):
-    logging.debug('this is key %s' %key)
-    summary = jira_rest_handler.searchIssueByKey(key)['fields']['summary']
-    description = jira_rest_handler.searchIssueByKey(key)['fields']['description']
-    #find project 
-    find_list = config_data[key.spilt("-")[0]]["find_list"]
-    #logging_message.input_message(path = message_path,message = "summary is: %s" %summary)
-    #logging.debug('%s' %description)
-    #logging.debug('%s' %str(find_list))
-    logging_message.input_message(path = message_path,message = '==start feild update!==')
-    for find in find_list['summary']['fields']:
-        search_listaaa = find_list['summary']['fields'][find]
-        update_fleid_by_find_list(summary,search_listaaa,key,jira_rest_handler)
-        
-    for find in find_list['description']['fields']:
-        logging.debug("start find ['description']['fields']: %s"%str(find))
-        search_listaaa = find_list['description']['fields'][find]
-        update_fleid_by_find_list(description,search_listaaa,key,jira_rest_handler)
-    #logging_message.input_message(path = message_path,message = '==feild update done!==')
-
-    #logging_message.input_message(path = message_path,message = '==start labels update!==')
-    for find in find_list['summary']['labels']:
-        logging.debug("start find ['summary']['labels']: %s"%str(find))
-        search_listaaa = find_list['summary']['fields'][find]
+def search_reg_value(search_key = None, search_value = None, summary = None, description = None):
+    #logging.info(f'search_value - {search_value}')
+    #logging.info(f'description - {description}')
+    find_value = None
+    find_text = None
     
-    for a in find_list['description']['labels']:
-        logging.debug("start find ['summary']['labels']: %s"%str(find))
-        logging.debug("['description']['labels'] is %s"%a)
-    #logging_message.input_message(path = message_path,message = '==labels update done!==')    
-    return 0
+    #logging.info(search_value['search_reg'].lower())
+    searching_reg_results = re.findall(search_value['search_reg'].lower(),summary.lower()+'\n'+description.replace('\r\n','\n').lower())
+    text = 'None' if not searching_reg_results else ','.join(searching_reg_results)
+    #logging.info(text)
+    search_keys = search_value['search_keys']
+    for seach_key in search_keys:
+        #logging.info(f're.search({seach_key},str(searching_reg_result))')
+        find_result = re.search(seach_key.lower(),text)
+        if find_result is not None:
+            #logging.info(find_result.group(0))
+            find_value = search_keys[seach_key]
+            find_text = find_result.group(0)
+            break
+    #logging.info(f'find_text - {find_text}')
+    #logging.info(f'find_value - {find_value}')
+    return find_value
 
-    for find_key in find_list.keys():
-        logging.info(str(re.search(find_list[find_key],description)))
-        if re.search(find_list[find_key],description) is not None:
-            if re.search(find_list[find_key],description).group(0) in field_label_list.keys():
-                find_result[find_key] = field_label_list[re.search(find_list[find_key],description).group(0)]
-            else:
-                find_result[find_key] = re.search(find_list[find_key],description).group(0)
-    logging.debug('field and labes - %s' %str(find_result))
-    logging_message.input_message(path = message_path,message = 'field and labes - %s' %str(find_result))
+# =====================================================================================================
+def upload_label_field(zyra_handler,key):
+    logging.debug('this is key %s' %key)
+    ticket_info = zyra_handler.searchIssueByKey(key)
+    summary = ticket_info['fields']['summary']
+    description = ticket_info['fields']['description']
+    #find project
+    field_label_sync = bs3_config_data['project'][str(key).split("-")[0]]['field_label_sync']
+    search_fields = field_label_sync['fields']
+    search_labels = field_label_sync['labels']
+    for search_field in search_fields:
+        search_result = search_reg_value(search_key = search_field, search_value = search_fields[search_field], summary = summary, description = description)
+        logging.info(f'{search_field}, search_result - {search_result}')
+        loggas.input_message(path = message_path,message = f'update info - {key} : {search_field} - {search_result}')
+       
+        input_result = None
+        input_result = search_fields[search_field]['return_type']
+        if search_result:
+            if type(input_result) is list:
+                if len(input_result) == 0:
+                    input_result = [search_result]
+                elif len(input_result) == 1:
+                    input_result = [{"value":search_result}]
+                else:
+                    pass
+            if type(input_result) is dict:
+                input_result['value']=search_result
+            zyra_handler.update_customfield(key, search_field,input_result)
+    for search_label in search_labels:
+        search_result = search_reg_value(search_key = search_label, search_value = search_labels[search_label], summary = summary, description = description)
+        logging.info(f'{search_label}, search_result - {search_result}')
+        loggas.input_message(path = message_path,message = f'update info - {key} : {search_label} - {search_result}')
+        if search_result:
+            zyra_handler.update_label(key = key, label = search_result)
 
-    ticket_info = jira_rest_handler.searchIssueByKey(key)
-    ticket_category = ticket_info['fields']['customfield_13003']
-    ticket_category = ticket_info['fields']['customfield_13003']
-
-    def update_ticket_category(values):
-        ticket_category_fields = {}
-        ticket_category_fields['fields']={}
-        ticket_category_fields["fields"]["customfield_13003"] = {'value':values}
-        logging.debug('%s - %s' %(key,ticket_category_fields))
-        #jira_rest_handler.updateissue(key,ticket_category_fields)
-        return 0
-    if ticket_category == None:
-        update_ticket_category('Other')
-    else:
-        ticket_category = ticket_category['value']
-    logging.debug('ticket category - %s' %ticket_category)
-    for r in find_result:
-        if '_field' in r:
-            fields = {}
-            fields['fields']={}
-            fields["fields"]["customfield_11102"] = []
-            fields["fields"]["customfield_11102"].append({'value':find_result[r]})
-            if find_result[r] is None:
-                logging.debug('field is %s so passed'%find_result[r])
-                pass
-            else:
-                logging.debug('%s - %s' %(key,fields))
-                #jira_rest_handler.updateissue(key,fields)
-        elif '_label' in r:
-            logging.debug(find_result[r])
-            if find_result[r] == None:
-                logging.debug('label is %s so passed' %find_result[r])
-                pass
-            else:
-                logging.debug('%s - %s' %(key,find_result[r]))
-                jira_rest_handler.update_label(key,find_result[r])
-        else:
-            pass
     return 0
 # =====================================================================================================
 # =====================================================================================================
@@ -231,33 +194,29 @@ def upload_label_field(jira_rest_handler,key):
 # =====================================================================================================
 # this is file copy from navis server ans sync to jira
 # =====================================================================================================
-def sync_attachment(user=None, password = None, query = None):
-    session_list = jira_rest.initsession(user, password)
-    session = session_list[0]
-    session_info = session_list[1]
-    jira_rest_handler = jira_rest.Handler_Jira(session)
-    result = jira_rest_handler.searchIssueByQuery(query=query)
+def sync_bs3bug(user=None, password = None, query = None):
+    session, session_info, status_login = zyra.initsession(user, password ,jira_url = config_data['jira_url'])
+    zyra_handler = zyra.Handler_Jira(session,jira_url = config_data['jira_url'])
+    result = zyra_handler.searchIssueByQuery(query=query)
     for key in result:
         issuetype = result[key]['issuetype']['name']
-        logging.debug('start key - %s and issuetype - %s' %(key,issuetype))
-        if issuetype == 'BS3':
-            logging_message.input_message(path = message_path,message = 'start to check %s' %key)
-            bs3_path = config_data['project'][str(key).split("-")[0]]['bs3_path']
-            logging.debug(bs3_path)
-            sync_file_server_jira(jira_rest_handler,key,bs3_path)
-            #upload_label_field(jira_rest_handler,key)
-            logging.debug('key - %s and issuetype - %s done!\n' %(key,issuetype))
-            logging_message.input_message(path = message_path,message = 'end to check %s\n' %key)
-        elif issuetype == 'BUG':
-            ticket_info = jira_rest_handler.searchIssueByKey(key)['fields']
-            assignee = jira_rest_handler.searchIssueByKey(key)['fields']['assignee']
-            reporter = jira_rest_handler.searchIssueByKey(key)['fields']['reporter']
-            logging.info(assignee)
-            logging.info(reporter)
+        loggas.input_message(path = message_path,message = f'=============== start to check {key} - {issuetype} =============')
+        if str(issuetype).lower() == 'bs3':
+            if bs3_config_data['file_sync'] == "True":
+                file_sync_info = bs3_config_data['project'][str(key).split("-")[0]]['file_sync_info']
+                sync_file_server_jira(zyra_handler,key,file_sync_info)
+            if bs3_config_data['flied_lable_sync'] == "True":
+                upload_label_field(zyra_handler,key)
+        elif str(issuetype).lower() == 'bug':
+            if bs3_config_data['file_sync'] == "True":
+                file_sync_info = bs3_config_data['project'][str(key).split("-")[0]]['file_sync_info']
+            if bs3_config_data['flied_lable_sync'] == "True":
+                upload_label_field(zyra_handler,key)
         else:
             pass
-        
-
+        logging.info(f'{key} - {issuetype} done')
+        loggas.input_message(path = message_path,message = f'=============== end to check {key} - {issuetype} ===============')
+    return 0
 # =====================================================================================================
 # =====================================================================================================
 
