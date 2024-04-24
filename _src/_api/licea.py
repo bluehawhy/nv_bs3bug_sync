@@ -1,18 +1,61 @@
-import sys
+# -*- encoding: utf-8 -*-
+
+import os, sys
 import datetime
 from PyQt5.QtWidgets import *
 
-
-from _src._api import  config, jira_rest, license_key
+from . import configus, zyra
 
 
 config_path ='static\config\config.json'
-config_data =config.load_config(config_path)
+config_data =configus.load_config(config_path)
 message_path = config_data['message_path']
 qss_path  = config_data['qss_path']
 
 
+SHIFT = 27
+private_key = 'He was an old man who fished alone in a skiff in the Gulf Stream and he had gone eighty-four days now without taking a fish. In the first forty days a boy had been with him. But after forty days without a fish the boy’s parents had told him that the old man was now definitely and finally salao, which is the worst form of unlucky, and the boy had gone at their orders in another boat which caught three good fish the first week. It made the boy sad to see the old man come in each day with his skiff empty and he always went down to help him carry either the coiled lines or the gaff and harpoon and the sail that was furled around the mast. The sail was patched with flour sacks and, furled, it looked like the flag of permanent defeat.'
 
+def encrypt(raw):
+    ret = ''
+    raw = raw+private_key
+    for char in raw:
+        ret += chr(ord(char) + SHIFT)
+    return ret
+
+def decrypt(raw):
+    ret = ''
+    for char in raw:
+        ret += chr(ord(char) - SHIFT)
+    ret = ret.replace(private_key,'')
+    return ret
+
+def createLicense(raw):
+    os.makedirs('static/license') if not os.path.isdir('static/license') else None
+    f = open("static/license/license.txt", 'w', encoding="utf-8")
+    encrypted = encrypt(raw)
+    f.write(encrypted)
+    f.close()
+
+def check_License():
+    license = {'user': 'user', 'date': '19000101'}
+    license_path = os.path.join(os.path.dirname(sys.argv[0]),'static','license','license.txt')
+    if os.path.exists(license_path):
+        f = open(license_path, 'r', encoding="utf-8")
+        line = f.readline()
+        f.close()
+        decryptd= decrypt(line)
+        license['user'] = decryptd.split('_')[0]
+        license['date'] = decryptd.split('_')[1]
+    return license
+
+def valild_License(license):
+    day_validation = False
+    license_str = license['date']
+    today_str = datetime.date.today().strftime("%Y%m%d")
+    if license_str >= today_str:
+            day_validation = True
+    return day_validation
 
 class MyMainWindow(QMainWindow):
     def __init__(self):
@@ -65,31 +108,22 @@ class LoginForm(QWidget):
         msg = QMessageBox()
         self.user = self.line_id.text()
         self.password = self.line_password.text()
-        self.session_list = jira_rest.initsession(self.user, self.password)
-        self.session = self.session_list[0]
-        self.session_info = self.session_list[1]
+        self.session,self.session_info, self.status_login = zyra.initsession(username = self.user, password= self.password)
         #fail to login
-        if self.session_info == None:
+        if self.status_login is False:
             QMessageBox.about(self, "Login Fail", "please check your password or internet connection")
         #if loggin success
         else:
             QMessageBox.about(self, "Login success", "please close the window and restart again")
             config_data['id'] = self.user
             config_data['password'] = self.password
-            config.save_config(config_data,config_path)
+            configus.save_config(config_data,config_path)
             self.line_id.setReadOnly(1)
             self.line_password.setReadOnly(1)
             self.button_login.setEnabled(False)
             #create license
             license_for_day_100 = datetime.date.today() + datetime.timedelta(days=100)
             licen_raw = self.user+"_"+ license_for_day_100.strftime("%Y%m%d")
-            license_key.createLicense(licen_raw)
+            createLicense(licen_raw)
         return 0
-            
-
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    form = LoginForm()
-    form.show()
-    
-    sys.exit(app.exec_())
+  
